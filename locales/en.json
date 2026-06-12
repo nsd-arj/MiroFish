@@ -563,7 +563,9 @@
     "getReportInfoFailed": "Failed to get report info: {error}",
     "enterStep": "Entering Step {step}: {name}",
     "returnToStep": "Returning to Step {step}: {name}",
-    "customSimRounds": "Custom simulation rounds: {rounds} rounds"
+    "customSimRounds": "Custom simulation rounds: {rounds} rounds",
+    "reportAlreadyCompleted": "Report already completed",
+    "reportGenFailedExplicit": "Report generation failed: {error}"
   },
   "report": {
     "taskStarted": "Report generation task started",

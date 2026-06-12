@@ -393,7 +393,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getAgentLog, getConsoleLog } from '../api/report'
+import { getAgentLog, getConsoleLog, getReport } from '../api/report'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -2154,12 +2154,43 @@ const fetchConsoleLog = async () => {
   }
 }
 
-const startPolling = () => {
+const checkReportStatus = async () => {
+  if (!props.reportId) return
+
+  try {
+    const res = await getReport(props.reportId)
+    if (res.success && res.data) {
+      // Populate outline from API response so the UI can render immediately
+      if (res.data.outline) {
+        reportOutline.value = res.data.outline
+      }
+
+      if (res.data.status === 'completed') {
+        isComplete.value = true
+        currentSectionIndex.value = null
+        emit('update-status', 'completed')
+        addLog(t('log.reportAlreadyCompleted'))
+        // Don't stop polling yet - we still need to load all logs for display
+      } else if (res.data.status === 'failed') {
+        isComplete.value = true
+        currentSectionIndex.value = null
+        stopPolling()
+        emit('update-status', 'error')
+        addLog(t('log.reportGenFailedExplicit', { error: res.data.error || t('common.unknownError') }))
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to check report status:', err)
+  }
+}
+
+const startPolling = async () => {
   if (agentLogTimer || consoleLogTimer) return
-  
+
+  await checkReportStatus()
   fetchAgentLog()
   fetchConsoleLog()
-  
+
   agentLogTimer = setInterval(fetchAgentLog, 2000)
   consoleLogTimer = setInterval(fetchConsoleLog, 1500)
 }

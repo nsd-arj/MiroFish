@@ -8,7 +8,7 @@ import service, { requestWithRetry } from './index'
 export function generateOntology(formData) {
   return requestWithRetry(() => 
     service({
-      url: '/api/graph/ontology/generate',
+      url: '/graph/ontology/generate',
       method: 'post',
       data: formData,
       headers: {
@@ -26,7 +26,7 @@ export function generateOntology(formData) {
 export function buildGraph(data) {
   return requestWithRetry(() =>
     service({
-      url: '/api/graph/build',
+      url: '/graph/build',
       method: 'post',
       data
     })
