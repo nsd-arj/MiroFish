@@ -23,6 +23,11 @@ from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, get_locale, set_locale, t
 from .zep_entity_reader import EntityNode, ZepEntityReader
+from .spectrum_initializer import (
+    BrandContext,
+    assign_cohorts,
+    build_cohort_persona_context,
+)
 
 logger = get_logger('mirofish.oasis_profile')
 
@@ -53,6 +58,12 @@ class OasisAgentProfile:
     profession: Optional[str] = None
     interested_topics: List[str] = field(default_factory=list)
     
+    # Spectrum / marketing fields
+    sentiment_bias: float = 0.0       # -1.0 (hostile) to +1.0 (enthusiastic)
+    stance: str = "neutral"            # supportive / opposing / neutral / observer
+    influence_weight: float = 1.0      # relative reach multiplier
+    cohort: Optional[str] = None       # advocate / loyalist / neutral / skeptic / hater
+
     # 来源实体信息
     source_entity_uuid: Optional[str] = None
     source_entity_type: Optional[str] = None
@@ -84,9 +95,16 @@ class OasisAgentProfile:
             profile["profession"] = self.profession
         if self.interested_topics:
             profile["interested_topics"] = self.interested_topics
-        
+
+        # Spectrum fields — always include so simulation config can read them
+        profile["sentiment_bias"] = self.sentiment_bias
+        profile["stance"] = self.stance
+        profile["influence_weight"] = self.influence_weight
+        if self.cohort:
+            profile["cohort"] = self.cohort
+
         return profile
-    
+
     def to_twitter_format(self) -> Dict[str, Any]:
         """转换为Twitter平台格式"""
         profile = {
@@ -114,9 +132,15 @@ class OasisAgentProfile:
             profile["profession"] = self.profession
         if self.interested_topics:
             profile["interested_topics"] = self.interested_topics
-        
+
+        profile["sentiment_bias"] = self.sentiment_bias
+        profile["stance"] = self.stance
+        profile["influence_weight"] = self.influence_weight
+        if self.cohort:
+            profile["cohort"] = self.cohort
+
         return profile
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为完整字典格式"""
         return {
@@ -135,6 +159,10 @@ class OasisAgentProfile:
             "country": self.country,
             "profession": self.profession,
             "interested_topics": self.interested_topics,
+            "sentiment_bias": self.sentiment_bias,
+            "stance": self.stance,
+            "influence_weight": self.influence_weight,
+            "cohort": self.cohort,
             "source_entity_uuid": self.source_entity_uuid,
             "source_entity_type": self.source_entity_type,
             "created_at": self.created_at,
@@ -211,10 +239,11 @@ class OasisProfileGenerator:
                 logger.warning(f"Zep客户端初始化失败: {e}")
     
     def generate_profile_from_entity(
-        self, 
-        entity: EntityNode, 
+        self,
+        entity: EntityNode,
         user_id: int,
-        use_llm: bool = True
+        use_llm: bool = True,
+        cohort_context: Optional[str] = None,
     ) -> OasisAgentProfile:
         """
         从Zep实体生成OASIS Agent Profile
@@ -243,7 +272,8 @@ class OasisProfileGenerator:
                 entity_type=entity_type,
                 entity_summary=entity.summary,
                 entity_attributes=entity.attributes,
-                context=context
+                context=context,
+                cohort_context=cohort_context,
             )
         else:
             # 使用规则生成基础人设
@@ -500,21 +530,23 @@ class OasisProfileGenerator:
         entity_type: str,
         entity_summary: str,
         entity_attributes: Dict[str, Any],
-        context: str
+        context: str,
+        cohort_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         使用LLM生成非常详细的人设
-        
+
         根据实体类型区分：
         - 个人实体：生成具体的人物设定
         - 群体/机构实体：生成代表性账号设定
         """
-        
+
         is_individual = self._is_individual_entity(entity_type)
-        
+
         if is_individual:
             prompt = self._build_individual_persona_prompt(
-                entity_name, entity_type, entity_summary, entity_attributes, context
+                entity_name, entity_type, entity_summary, entity_attributes, context,
+                cohort_context=cohort_context,
             )
         else:
             prompt = self._build_group_persona_prompt(
@@ -679,12 +711,17 @@ class OasisProfileGenerator:
         entity_type: str,
         entity_summary: str,
         entity_attributes: Dict[str, Any],
-        context: str
+        context: str,
+        cohort_context: Optional[str] = None,
     ) -> str:
-        """构建个人实体的详细人设提示词"""
-        
+        """构建个人实체的详细人설提示词"""
+
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "none"
         context_str = context[:3000] if context else "no additional context"
+
+        cohort_section = ""
+        if cohort_context:
+            cohort_section = f"\n\nAudience Cohort Assignment:\n{cohort_context}\n"
 
         return f"""Generate a detailed social media user persona for this entity, accurately reflecting real-world context.
 
@@ -694,8 +731,7 @@ Entity summary: {entity_summary}
 Entity attributes: {attrs_str}
 
 Context information:
-{context_str}
-
+{context_str}{cohort_section}
 Generate JSON with the following fields:
 
 1. bio: Social media profile bio, ~200 words
@@ -855,7 +891,8 @@ Important:
         graph_id: Optional[str] = None,
         parallel_count: int = 5,
         realtime_output_path: Optional[str] = None,
-        output_platform: str = "reddit"
+        output_platform: str = "reddit",
+        brand_context: Optional[BrandContext] = None,
     ) -> List[OasisAgentProfile]:
         """
         批量从实体生成Agent Profile（支持并行生成）
@@ -878,11 +915,20 @@ Important:
         # 设置graph_id用于Zep检索
         if graph_id:
             self.graph_id = graph_id
-        
+
         total = len(entities)
         profiles = [None] * total  # 预分配列表保持顺序
         completed_count = [0]  # 使用列表以便在闭包中修改
         lock = Lock()
+
+        # Pre-assign spectrum cohorts when brand_context is provided
+        cohort_assignments = None
+        if brand_context is not None:
+            cohort_assignments = assign_cohorts(total)
+            cohort_summary = {}
+            for ca in cohort_assignments:
+                cohort_summary[ca.cohort.value] = cohort_summary.get(ca.cohort.value, 0) + 1
+            logger.info(f"Spectrum cohorts assigned: {cohort_summary}")
         
         # 实时写入文件的辅助函数
         def save_profiles_realtime():
@@ -928,13 +974,27 @@ Important:
             """生成单个profile的工作函数"""
             set_locale(current_locale)
             entity_type = entity.get_entity_type() or "Entity"
-            
+
+            # Build cohort context string for this agent (if spectrum is enabled)
+            cohort_context_str = None
+            assignment = cohort_assignments[idx] if cohort_assignments else None
+            if assignment and brand_context is not None:
+                cohort_context_str = build_cohort_persona_context(assignment, brand_context)
+
             try:
                 profile = self.generate_profile_from_entity(
                     entity=entity,
                     user_id=idx,
-                    use_llm=use_llm
+                    use_llm=use_llm,
+                    cohort_context=cohort_context_str,
                 )
+
+                # Apply spectrum behavioral calibration
+                if assignment is not None:
+                    profile.sentiment_bias = assignment.sentiment_bias
+                    profile.stance = assignment.stance
+                    profile.influence_weight = assignment.influence_weight
+                    profile.cohort = assignment.cohort.value
                 
                 # 实时输出生成的人设到控制台和日志
                 self._print_generated_profile(entity.name, entity_type, profile)
@@ -943,7 +1003,6 @@ Important:
                 
             except Exception as e:
                 logger.error(f"生成实体 {entity.name} 的人设失败: {str(e)}")
-                # 创建一个基础profile
                 fallback_profile = OasisAgentProfile(
                     user_id=idx,
                     user_name=self._generate_username(entity.name),
@@ -952,6 +1011,10 @@ Important:
                     persona=entity.summary or f"A participant in social discussions.",
                     source_entity_uuid=entity.uuid,
                     source_entity_type=entity_type,
+                    sentiment_bias=assignment.sentiment_bias if assignment else 0.0,
+                    stance=assignment.stance if assignment else "neutral",
+                    influence_weight=assignment.influence_weight if assignment else 1.0,
+                    cohort=assignment.cohort.value if assignment else None,
                 )
                 return idx, fallback_profile, str(e)
         
