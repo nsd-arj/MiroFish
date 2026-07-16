@@ -48,6 +48,12 @@ class Project:
     simulation_requirement: Optional[str] = None
     chunk_size: int = 500
     chunk_overlap: int = 50
+
+    # Brand context (optional — sharpens cohort persona generation)
+    brand_name: Optional[str] = None
+    primary_objection: Optional[str] = None
+    advocate_trigger: Optional[str] = None
+    target_segment: Optional[str] = None
     
     # 错误信息
     error: Optional[str] = None
@@ -69,6 +75,10 @@ class Project:
             "simulation_requirement": self.simulation_requirement,
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
+            "brand_name": self.brand_name,
+            "primary_objection": self.primary_objection,
+            "advocate_trigger": self.advocate_trigger,
+            "target_segment": self.target_segment,
             "error": self.error
         }
     
@@ -94,6 +104,10 @@ class Project:
             simulation_requirement=data.get('simulation_requirement'),
             chunk_size=data.get('chunk_size', 500),
             chunk_overlap=data.get('chunk_overlap', 50),
+            brand_name=data.get('brand_name'),
+            primary_objection=data.get('primary_objection'),
+            advocate_trigger=data.get('advocate_trigger'),
+            target_segment=data.get('target_segment'),
             error=data.get('error')
         )
 

@@ -189,6 +189,50 @@
               </div>
             </div>
 
+            <!-- Brand context -->
+            <div class="console-divider">
+              <span>Brand Context <span class="divider-optional">(optional)</span></span>
+            </div>
+
+            <div class="console-section brand-section">
+              <div class="brand-field">
+                <label class="brand-label">Brand Name</label>
+                <input
+                  v-model="formData.brandName"
+                  class="brand-input"
+                  placeholder="e.g. Acme Co."
+                  :disabled="loading"
+                />
+              </div>
+              <div class="brand-field">
+                <label class="brand-label">Primary Objection</label>
+                <input
+                  v-model="formData.primaryObjection"
+                  class="brand-input"
+                  placeholder="e.g. too expensive, privacy concerns"
+                  :disabled="loading"
+                />
+              </div>
+              <div class="brand-field">
+                <label class="brand-label">Advocate Trigger</label>
+                <input
+                  v-model="formData.advocateTrigger"
+                  class="brand-input"
+                  placeholder="e.g. best customer support I've ever had"
+                  :disabled="loading"
+                />
+              </div>
+              <div class="brand-field">
+                <label class="brand-label">Target Segment</label>
+                <input
+                  v-model="formData.targetSegment"
+                  class="brand-input"
+                  placeholder="e.g. small business owner, 30–45"
+                  :disabled="loading"
+                />
+              </div>
+            </div>
+
             <!-- 启动按钮 -->
             <div class="console-section btn-section">
               <button 
@@ -221,7 +265,11 @@ const router = useRouter()
 
 // 表单数据
 const formData = ref({
-  simulationRequirement: ''
+  simulationRequirement: '',
+  brandName: '',
+  primaryObjection: '',
+  advocateTrigger: '',
+  targetSegment: '',
 })
 
 // 文件列表
@@ -300,7 +348,12 @@ const startSimulation = () => {
   
   // 存储待上传的数据
   import('../store/pendingUpload.js').then(({ setPendingUpload }) => {
-    setPendingUpload(files.value, formData.value.simulationRequirement)
+    setPendingUpload(files.value, formData.value.simulationRequirement, {
+        brandName: formData.value.brandName,
+        primaryObjection: formData.value.primaryObjection,
+        advocateTrigger: formData.value.advocateTrigger,
+        targetSegment: formData.value.targetSegment,
+      })
     
     // 立即跳转到Process页面（使用特殊标识表示新建项目）
     router.push({
@@ -821,6 +874,53 @@ const startSimulation = () => {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: #AAA;
+}
+
+.divider-optional {
+  font-size: 0.75em;
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+.brand-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 4px;
+}
+
+.brand-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.brand-input {
+  border: 1px solid #E0E0E0;
+  background: transparent;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+  color: inherit;
+}
+
+.brand-input:focus {
+  border-color: #000;
+}
+
+.brand-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .start-engine-btn {

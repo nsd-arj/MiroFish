@@ -16,6 +16,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
+from .spectrum_initializer import BrandContext
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 from ..utils.locale import t
 
@@ -235,7 +236,8 @@ class SimulationManager:
         defined_entity_types: Optional[List[str]] = None,
         use_llm_for_profiles: bool = True,
         progress_callback: Optional[callable] = None,
-        parallel_profile_count: int = 3
+        parallel_profile_count: int = 3,
+        brand_context: Optional[BrandContext] = None,
     ) -> SimulationState:
         """
         准备模拟环境（全程自动化）
@@ -340,10 +342,11 @@ class SimulationManager:
                 entities=filtered.entities,
                 use_llm=use_llm_for_profiles,
                 progress_callback=profile_progress,
-                graph_id=state.graph_id,  # 传入graph_id用于Zep检索
-                parallel_count=parallel_profile_count,  # 并行生成数量
-                realtime_output_path=realtime_output_path,  # 实时保存路径
-                output_platform=realtime_platform  # 输出格式
+                graph_id=state.graph_id,
+                parallel_count=parallel_profile_count,
+                realtime_output_path=realtime_output_path,
+                output_platform=realtime_platform,
+                brand_context=brand_context,
             )
             
             state.profiles_count = len(profiles)

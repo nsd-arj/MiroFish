@@ -12,6 +12,7 @@ from ..config import Config
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
+from ..services.spectrum_initializer import BrandContext
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
@@ -467,6 +468,15 @@ def prepare_simulation():
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
         parallel_profile_count = data.get('parallel_profile_count', 5)
+
+        brand_context = None
+        if project.brand_name:
+            brand_context = BrandContext(
+                brand_name=project.brand_name,
+                primary_objection=project.primary_objection,
+                advocate_trigger=project.advocate_trigger,
+                target_segment=project.target_segment,
+            )
         
         # ========== 同步获取实体数量（在后台任务启动前） ==========
         # 这样前端在调用prepare后立即就能获取到预期Agent总数
@@ -587,7 +597,8 @@ def prepare_simulation():
                     defined_entity_types=entity_types_list,
                     use_llm_for_profiles=use_llm_for_profiles,
                     progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count
+                    parallel_profile_count=parallel_profile_count,
+                    brand_context=brand_context,
                 )
                 
                 # 任务完成

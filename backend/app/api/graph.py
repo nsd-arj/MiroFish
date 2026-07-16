@@ -154,6 +154,10 @@ def generate_ontology():
         simulation_requirement = request.form.get('simulation_requirement', '')
         project_name = request.form.get('project_name', 'Unnamed Project')
         additional_context = request.form.get('additional_context', '')
+        brand_name = request.form.get('brand_name', '').strip() or None
+        primary_objection = request.form.get('primary_objection', '').strip() or None
+        advocate_trigger = request.form.get('advocate_trigger', '').strip() or None
+        target_segment = request.form.get('target_segment', '').strip() or None
         
         logger.debug(f"项目名称: {project_name}")
         logger.debug(f"模拟需求: {simulation_requirement[:100]}...")
@@ -175,6 +179,10 @@ def generate_ontology():
         # 创建项目
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
+        project.brand_name = brand_name
+        project.primary_objection = primary_objection
+        project.advocate_trigger = advocate_trigger
+        project.target_segment = target_segment
         logger.info(f"创建项目: {project.project_id}")
         
         # 保存文件并提取文本
