@@ -29,7 +29,7 @@ export const getPrepareStatus = (data) => {
  * @param {string} simulationId
  */
 export const getSimulation = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}`)
+  return service.get(`/simulation/${simulationId}`)
 }
 
 /**
@@ -38,7 +38,7 @@ export const getSimulation = (simulationId) => {
  * @param {string} platform - 'reddit' | 'twitter'
  */
 export const getSimulationProfiles = (simulationId, platform = 'reddit') => {
-  return service.get(`/api/simulation/${simulationId}/profiles`, { params: { platform } })
+  return service.get(`/simulation/${simulationId}/profiles`, { params: { platform } })
 }
 
 /**
@@ -47,7 +47,7 @@ export const getSimulationProfiles = (simulationId, platform = 'reddit') => {
  * @param {string} platform - 'reddit' | 'twitter'
  */
 export const getSimulationProfilesRealtime = (simulationId, platform = 'reddit') => {
-  return service.get(`/api/simulation/${simulationId}/profiles/realtime`, { params: { platform } })
+  return service.get(`/simulation/${simulationId}/profiles/realtime`, { params: { platform } })
 }
 
 /**
@@ -55,7 +55,7 @@ export const getSimulationProfilesRealtime = (simulationId, platform = 'reddit')
  * @param {string} simulationId
  */
 export const getSimulationConfig = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/config`)
+  return service.get(`/simulation/${simulationId}/config`)
 }
 
 /**
@@ -64,7 +64,7 @@ export const getSimulationConfig = (simulationId) => {
  * @returns {Promise} 返回配置信息，包含元数据和配置内容
  */
 export const getSimulationConfigRealtime = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/config/realtime`)
+  return service.get(`/simulation/${simulationId}/config/realtime`)
 }
 
 /**
@@ -97,7 +97,7 @@ export const stopSimulation = (data) => {
  * @param {string} simulationId
  */
 export const getRunStatus = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/run-status`)
+  return service.get(`/simulation/${simulationId}/run-status`)
 }
 
 /**
@@ -105,7 +105,7 @@ export const getRunStatus = (simulationId) => {
  * @param {string} simulationId
  */
 export const getRunStatusDetail = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/run-status/detail`)
+  return service.get(`/simulation/${simulationId}/run-status/detail`)
 }
 
 /**
@@ -116,7 +116,7 @@ export const getRunStatusDetail = (simulationId) => {
  * @param {number} offset - 偏移量
  */
 export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50, offset = 0) => {
-  return service.get(`/api/simulation/${simulationId}/posts`, {
+  return service.get(`/simulation/${simulationId}/posts`, {
     params: { platform, limit, offset }
   })
 }
@@ -132,7 +132,7 @@ export const getSimulationTimeline = (simulationId, startRound = 0, endRound = n
   if (endRound !== null) {
     params.end_round = endRound
   }
-  return service.get(`/api/simulation/${simulationId}/timeline`, { params })
+  return service.get(`/simulation/${simulationId}/timeline`, { params })
 }
 
 /**
@@ -140,7 +140,7 @@ export const getSimulationTimeline = (simulationId, startRound = 0, endRound = n
  * @param {string} simulationId
  */
 export const getAgentStats = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/agent-stats`)
+  return service.get(`/simulation/${simulationId}/agent-stats`)
 }
 
 /**
@@ -149,7 +149,7 @@ export const getAgentStats = (simulationId) => {
  * @param {Object} params - { limit, offset, platform, agent_id, round_num }
  */
 export const getSimulationActions = (simulationId, params = {}) => {
-  return service.get(`/api/simulation/${simulationId}/actions`, { params })
+  return service.get(`/simulation/${simulationId}/actions`, { params })
 }
 
 /**

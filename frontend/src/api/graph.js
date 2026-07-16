@@ -40,7 +40,7 @@ export function buildGraph(data) {
  */
 export function getTaskStatus(taskId) {
   return service({
-    url: `/api/graph/task/${taskId}`,
+    url: `/graph/task/${taskId}`,
     method: 'get'
   })
 }
@@ -52,7 +52,7 @@ export function getTaskStatus(taskId) {
  */
 export function getGraphData(graphId) {
   return service({
-    url: `/api/graph/data/${graphId}`,
+    url: `/graph/data/${graphId}`,
     method: 'get'
   })
 }
@@ -64,7 +64,7 @@ export function getGraphData(graphId) {
  */
 export function getProject(projectId) {
   return service({
-    url: `/api/graph/project/${projectId}`,
+    url: `/graph/project/${projectId}`,
     method: 'get'
   })
 }
