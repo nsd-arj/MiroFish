@@ -222,6 +222,8 @@ def create_simulation():
             graph_id=graph_id,
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
+            audience_id=data.get('audience_id') or None,
+            simulation_requirement_override=data.get('simulation_requirement_override') or None,
         )
         
         return jsonify({

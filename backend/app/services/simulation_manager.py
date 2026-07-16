@@ -17,6 +17,7 @@ from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .spectrum_initializer import BrandContext
+from ..models.audience import AudienceManager
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 from ..utils.locale import t
 
@@ -73,9 +74,13 @@ class SimulationState:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
+    # Audience reuse
+    audience_id: Optional[str] = None
+    simulation_requirement_override: Optional[str] = None
+
     # 错误信息
     error: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """完整状态字典（内部使用）"""
         return {
@@ -95,6 +100,8 @@ class SimulationState:
             "reddit_status": self.reddit_status,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "audience_id": self.audience_id,
+            "simulation_requirement_override": self.simulation_requirement_override,
             "error": self.error,
         }
     
@@ -186,6 +193,8 @@ class SimulationManager:
             reddit_status=data.get("reddit_status", "not_started"),
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
+            audience_id=data.get("audience_id"),
+            simulation_requirement_override=data.get("simulation_requirement_override"),
             error=data.get("error"),
         )
         
@@ -198,6 +207,8 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        audience_id: Optional[str] = None,
+        simulation_requirement_override: Optional[str] = None,
     ) -> SimulationState:
         """
         创建新的模拟
@@ -221,6 +232,8 @@ class SimulationManager:
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
             status=SimulationStatus.CREATED,
+            audience_id=audience_id,
+            simulation_requirement_override=simulation_requirement_override,
         )
         
         self._save_simulation_state(state)
@@ -264,13 +277,17 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if not state:
             raise ValueError(f"模拟不存在: {simulation_id}")
-        
+
+        # Use per-simulation scenario override if set (audience reuse flow)
+        if state.simulation_requirement_override:
+            simulation_requirement = state.simulation_requirement_override
+
         try:
             state.status = SimulationStatus.PREPARING
             self._save_simulation_state(state)
-            
+
             sim_dir = self._get_simulation_dir(simulation_id)
-            
+
             # ========== 阶段1: 读取并过滤实体 ==========
             if progress_callback:
                 progress_callback("reading", 0, t('progress.connectingZepGraph'))
@@ -303,86 +320,121 @@ class SimulationManager:
                 self._save_simulation_state(state)
                 return state
             
-            # ========== 阶段2: 生成Agent Profile ==========
+            # ========== 阶段2: 生成Agent Profile (or load from saved audience) ==========
             total_entities = len(filtered.entities)
-            
-            if progress_callback:
-                progress_callback(
-                    "generating_profiles", 0,
-                    t('progress.startGenerating'),
-                    current=0,
-                    total=total_entities
-                )
-            
-            # 传入graph_id以启用Zep检索功能，获取更丰富的上下文
-            generator = OasisProfileGenerator(graph_id=state.graph_id)
-            
-            def profile_progress(current, total, msg):
+
+            if state.audience_id:
+                # --- Fast path: load pre-saved audience profiles ---
+                audience = AudienceManager.get(state.audience_id)
+                if not audience:
+                    raise ValueError(f"Audience not found: {state.audience_id}")
+
                 if progress_callback:
                     progress_callback(
-                        "generating_profiles", 
-                        int(current / total * 100), 
-                        msg,
-                        current=current,
-                        total=total,
-                        item_name=msg
+                        "generating_profiles", 50,
+                        f"Loading saved audience '{audience.name}' ({audience.profile_count} profiles)...",
+                        current=audience.profile_count,
+                        total=audience.profile_count,
                     )
-            
-            # 设置实时保存的文件路径（优先使用 Reddit JSON 格式）
-            realtime_output_path = None
-            realtime_platform = "reddit"
-            if state.enable_reddit:
-                realtime_output_path = os.path.join(sim_dir, "reddit_profiles.json")
+
+                # Copy audience profile files into this simulation's directory
+                if audience.has_reddit and state.enable_reddit:
+                    src = AudienceManager.get_profiles_path(state.audience_id, "reddit")
+                    if src:
+                        import shutil as _shutil
+                        _shutil.copy2(src, os.path.join(sim_dir, "reddit_profiles.json"))
+
+                if audience.has_twitter and state.enable_twitter:
+                    src = AudienceManager.get_profiles_path(state.audience_id, "twitter")
+                    if src:
+                        import shutil as _shutil
+                        _shutil.copy2(src, os.path.join(sim_dir, "twitter_profiles.csv"))
+
+                profiles = []  # config generation uses count only
+                state.profiles_count = audience.profile_count
+
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles", 100,
+                        f"Audience loaded: {audience.profile_count} profiles ready.",
+                        current=audience.profile_count,
+                        total=audience.profile_count,
+                    )
+
+            else:
+                # --- Normal path: generate profiles via LLM ---
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles", 0,
+                        t('progress.startGenerating'),
+                        current=0,
+                        total=total_entities
+                    )
+
+                generator = OasisProfileGenerator(graph_id=state.graph_id)
+
+                def profile_progress(current, total, msg):
+                    if progress_callback:
+                        progress_callback(
+                            "generating_profiles",
+                            int(current / total * 100),
+                            msg,
+                            current=current,
+                            total=total,
+                            item_name=msg
+                        )
+
+                realtime_output_path = None
                 realtime_platform = "reddit"
-            elif state.enable_twitter:
-                realtime_output_path = os.path.join(sim_dir, "twitter_profiles.csv")
-                realtime_platform = "twitter"
-            
-            profiles = generator.generate_profiles_from_entities(
-                entities=filtered.entities,
-                use_llm=use_llm_for_profiles,
-                progress_callback=profile_progress,
-                graph_id=state.graph_id,
-                parallel_count=parallel_profile_count,
-                realtime_output_path=realtime_output_path,
-                output_platform=realtime_platform,
-                brand_context=brand_context,
-            )
-            
-            state.profiles_count = len(profiles)
-            
-            # 保存Profile文件（注意：Twitter使用CSV格式，Reddit使用JSON格式）
-            # Reddit 已经在生成过程中实时保存了，这里再保存一次确保完整性
-            if progress_callback:
-                progress_callback(
-                    "generating_profiles", 95,
-                    t('progress.savingProfiles'),
-                    current=total_entities,
-                    total=total_entities
+                if state.enable_reddit:
+                    realtime_output_path = os.path.join(sim_dir, "reddit_profiles.json")
+                    realtime_platform = "reddit"
+                elif state.enable_twitter:
+                    realtime_output_path = os.path.join(sim_dir, "twitter_profiles.csv")
+                    realtime_platform = "twitter"
+
+                profiles = generator.generate_profiles_from_entities(
+                    entities=filtered.entities,
+                    use_llm=use_llm_for_profiles,
+                    progress_callback=profile_progress,
+                    graph_id=state.graph_id,
+                    parallel_count=parallel_profile_count,
+                    realtime_output_path=realtime_output_path,
+                    output_platform=realtime_platform,
+                    brand_context=brand_context,
                 )
-            
-            if state.enable_reddit:
-                generator.save_profiles(
-                    profiles=profiles,
-                    file_path=os.path.join(sim_dir, "reddit_profiles.json"),
-                    platform="reddit"
-                )
-            
-            if state.enable_twitter:
-                # Twitter使用CSV格式！这是OASIS的要求
-                generator.save_profiles(
-                    profiles=profiles,
-                    file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
-                    platform="twitter"
-                )
-            
-            if progress_callback:
-                progress_callback(
-                    "generating_profiles", 100,
-                    t('progress.profilesComplete', count=len(profiles)),
-                    current=len(profiles),
-                    total=len(profiles)
-                )
+
+                state.profiles_count = len(profiles)
+
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles", 95,
+                        t('progress.savingProfiles'),
+                        current=total_entities,
+                        total=total_entities
+                    )
+
+                if state.enable_reddit:
+                    generator.save_profiles(
+                        profiles=profiles,
+                        file_path=os.path.join(sim_dir, "reddit_profiles.json"),
+                        platform="reddit"
+                    )
+
+                if state.enable_twitter:
+                    generator.save_profiles(
+                        profiles=profiles,
+                        file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
+                        platform="twitter"
+                    )
+
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles", 100,
+                        t('progress.profilesComplete', count=len(profiles)),
+                        current=len(profiles),
+                        total=len(profiles)
+                    )
             
             # ========== 阶段3: LLM智能生成模拟配置 ==========
             if progress_callback:

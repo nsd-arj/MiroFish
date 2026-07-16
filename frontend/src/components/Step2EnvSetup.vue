@@ -109,6 +109,29 @@
                 </div>
               </div>
             </div>
+          <!-- Save as Audience -->
+          <div v-if="phase > 1 && profiles.length > 0" class="save-audience-block">
+            <div v-if="!audienceSaved">
+              <div class="save-audience-label">Save this audience for reuse</div>
+              <div class="save-audience-row">
+                <input
+                  v-model="audienceName"
+                  class="save-audience-input"
+                  placeholder="e.g. Acme Co. — Initial Audience"
+                  :disabled="audienceSaving"
+                  @keyup.enter="handleSaveAudience"
+                />
+                <button
+                  class="save-audience-btn"
+                  :disabled="!audienceName.trim() || audienceSaving"
+                  @click="handleSaveAudience"
+                >{{ audienceSaving ? 'Saving...' : 'Save Audience' }}</button>
+              </div>
+              <div v-if="audienceSaveError" class="save-audience-error">{{ audienceSaveError }}</div>
+            </div>
+            <div v-else class="save-audience-success">
+              ✓ Audience saved — you can now reuse "{{ audienceName }}" for future simulations from the home screen.
+            </div>
           </div>
         </div>
       </div>
@@ -641,6 +664,7 @@ import {
   getSimulationConfig,
   getSimulationConfigRealtime
 } from '../api/simulation'
+import { saveAudience } from '../api/audience'
 
 const { t } = useI18n()
 
@@ -665,6 +689,12 @@ const expectedTotal = ref(null)
 const simulationConfig = ref(null)
 const selectedProfile = ref(null)
 const showProfilesDetail = ref(true)
+
+// Audience save state
+const audienceName = ref('')
+const audienceSaving = ref(false)
+const audienceSaved = ref(false)
+const audienceSaveError = ref('')
 
 // 日志去重：记录上一次输出的关键信息
 let lastLoggedMessage = ''
@@ -766,6 +796,27 @@ const truncateBio = (bio) => {
 
 const selectProfile = (profile) => {
   selectedProfile.value = profile
+}
+
+const handleSaveAudience = async () => {
+  if (!audienceName.value.trim()) return
+  audienceSaving.value = true
+  audienceSaveError.value = ''
+  try {
+    const res = await saveAudience({
+      simulationId: props.simulationId,
+      name: audienceName.value.trim()
+    })
+    if (res.success) {
+      audienceSaved.value = true
+    } else {
+      audienceSaveError.value = res.error || 'Save failed'
+    }
+  } catch (e) {
+    audienceSaveError.value = e.message || 'Save failed'
+  } finally {
+    audienceSaving.value = false
+  }
 }
 
 // 自动开始准备模拟
@@ -2601,5 +2652,65 @@ onUnmounted(() => {
 .modal-leave-to .profile-modal {
   transform: scale(0.95) translateY(10px);
   opacity: 0;
+}
+
+/* Save as Audience */
+.save-audience-block {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px dashed #ccc;
+  background: #fafafa;
+}
+
+.save-audience-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.save-audience-row {
+  display: flex;
+  gap: 8px;
+}
+
+.save-audience-input {
+  flex: 1;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  outline: none;
+  background: #fff;
+}
+
+.save-audience-input:focus {
+  border-color: #000;
+}
+
+.save-audience-btn {
+  padding: 8px 18px;
+  background: #000;
+  color: #fff;
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.save-audience-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.save-audience-error {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #c00;
+}
+
+.save-audience-success {
+  font-size: 0.85rem;
+  color: #1a7f4f;
 }
 </style>

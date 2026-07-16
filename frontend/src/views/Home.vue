@@ -125,7 +125,79 @@
 
         <!-- 右栏：交互控制台 -->
         <div class="right-panel">
-          <div class="console-box">
+          <!-- Mode toggle -->
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: mode === 'new' }"
+              @click="switchMode('new')"
+            >New Brand</button>
+            <button
+              class="mode-btn"
+              :class="{ active: mode === 'audience' }"
+              @click="switchMode('audience')"
+            >Use Saved Audience</button>
+          </div>
+
+          <!-- Audience reuse panel -->
+          <div v-if="mode === 'audience'" class="console-box">
+            <div class="console-section">
+              <div class="console-header">
+                <span class="console-label">Saved Audiences</span>
+              </div>
+              <div v-if="audiencesLoading" class="audience-loading">Loading...</div>
+              <div v-else-if="audiences.length === 0" class="audience-empty">
+                No saved audiences yet. Complete a simulation and save its audience from the environment setup step.
+              </div>
+              <div v-else class="audience-list">
+                <div
+                  v-for="aud in audiences"
+                  :key="aud.audience_id"
+                  class="audience-card"
+                  :class="{ selected: selectedAudience?.audience_id === aud.audience_id }"
+                  @click="selectedAudience = aud"
+                >
+                  <div class="audience-name">{{ aud.name }}</div>
+                  <div class="audience-meta">
+                    <span v-if="aud.brand_name" class="audience-brand">{{ aud.brand_name }}</span>
+                    <span class="audience-count">{{ aud.profile_count }} agents</span>
+                    <span class="audience-date">{{ formatAudienceDate(aud.created_at) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="console-divider"><span>New Scenario</span></div>
+
+            <div class="console-section">
+              <div class="console-header">
+                <span class="console-label">Simulation Requirement</span>
+              </div>
+              <div class="input-wrapper">
+                <textarea
+                  v-model="audienceScenario"
+                  class="code-input"
+                  placeholder="Describe what you want to simulate with this audience..."
+                  rows="5"
+                  :disabled="audienceLoading"
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="console-section btn-section">
+              <button
+                class="start-engine-btn"
+                @click="startFromAudience"
+                :disabled="!selectedAudience || !audienceScenario.trim() || audienceLoading"
+              >
+                <span v-if="!audienceLoading">Run Simulation →</span>
+                <span v-else>Starting...</span>
+              </button>
+              <div v-if="audienceError" class="audience-start-error">{{ audienceError }}</div>
+            </div>
+          </div>
+
+          <div v-if="mode === 'new'" class="console-box">
             <!-- 上传区域 -->
             <div class="console-section">
               <div class="console-header">
@@ -254,7 +326,7 @@
                 <span class="btn-arrow">→</span>
               </button>
             </div>
-          </div>
+          </div><!-- end console-box (new brand) -->
         </div>
       </section>
 
@@ -265,10 +337,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
+import { listAudiences } from '../api/audience'
+import { createSimulation } from '../api/simulation'
 
 const router = useRouter()
 
@@ -292,6 +366,58 @@ const isDragOver = ref(false)
 
 // 文件输入引用
 const fileInput = ref(null)
+
+// Mode: 'new' = upload docs, 'audience' = use saved audience
+const mode = ref('new')
+
+// Audience reuse state
+const audiences = ref([])
+const audiencesLoading = ref(false)
+const selectedAudience = ref(null)
+const audienceScenario = ref('')
+const audienceLoading = ref(false)
+const audienceError = ref('')
+
+const switchMode = async (m) => {
+  mode.value = m
+  if (m === 'audience' && audiences.value.length === 0) {
+    audiencesLoading.value = true
+    try {
+      const res = await listAudiences()
+      if (res.success) audiences.value = res.data
+    } finally {
+      audiencesLoading.value = false
+    }
+  }
+}
+
+const formatAudienceDate = (iso) => {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const startFromAudience = async () => {
+  if (!selectedAudience.value || !audienceScenario.value.trim()) return
+  audienceLoading.value = true
+  audienceError.value = ''
+  try {
+    const res = await createSimulation({
+      project_id: selectedAudience.value.project_id,
+      graph_id: selectedAudience.value.graph_id,
+      audience_id: selectedAudience.value.audience_id,
+      simulation_requirement_override: audienceScenario.value.trim(),
+    })
+    if (res.success) {
+      router.push({ name: 'Simulation', params: { simulationId: res.data.simulation_id } })
+    } else {
+      audienceError.value = res.error || 'Failed to start simulation'
+    }
+  } catch (e) {
+    audienceError.value = e.message || 'Failed to start simulation'
+  } finally {
+    audienceLoading.value = false
+  }
+}
 
 // 计算属性:是否可以提交
 const canSubmit = computed(() => {
@@ -885,6 +1011,86 @@ const startSimulation = () => {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: #AAA;
+}
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex;
+  margin-bottom: 12px;
+  border: 1px solid #E0E0E0;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: #888;
+  transition: all 0.15s;
+}
+
+.mode-btn.active {
+  background: #000;
+  color: #fff;
+}
+
+/* Audience list */
+.audience-loading,
+.audience-empty {
+  font-size: 0.85rem;
+  color: #999;
+  padding: 16px 0;
+}
+
+.audience-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.audience-card {
+  padding: 12px;
+  border: 1px solid #E0E0E0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.audience-card:hover {
+  border-color: #999;
+}
+
+.audience-card.selected {
+  border-color: #000;
+  background: #F9F9F9;
+}
+
+.audience-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.audience-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.audience-brand {
+  color: #FF6B35;
+}
+
+.audience-start-error {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #c00;
 }
 
 .divider-optional {

@@ -415,6 +415,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
+import { createSimulation } from '../api/simulation'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import * as d3 from 'd3'
 
@@ -480,9 +481,21 @@ const goHome = () => {
   router.push('/')
 }
 
-const goToNextStep = () => {
-  // TODO: navigate to environment setup step
-  alert('Environment setup is coming soon...')
+const goToNextStep = async () => {
+  if (!currentProjectId.value || !projectData.value?.graph_id) return
+  try {
+    const res = await createSimulation({
+      project_id: currentProjectId.value,
+      graph_id: projectData.value.graph_id
+    })
+    if (res.data?.simulation_id) {
+      router.push({ name: 'Simulation', params: { simulationId: res.data.simulation_id } })
+    } else {
+      error.value = res.data?.error || 'Failed to create simulation'
+    }
+  } catch (e) {
+    error.value = e?.message || 'Failed to create simulation'
+  }
 }
 
 const toggleFullScreen = () => {
