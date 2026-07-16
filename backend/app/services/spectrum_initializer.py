@@ -114,6 +114,7 @@ class BrandContext:
     primary_objection: Optional[str] = None    # e.g. "cost and privacy concerns"
     advocate_trigger: Optional[str] = None     # e.g. "reconnecting with lost contacts"
     target_segment: Optional[str] = None       # e.g. "conscious consumer"
+    brand_url: Optional[str] = None            # e.g. "https://acme.com"
 
 
 @dataclass
@@ -166,7 +167,10 @@ def build_cohort_persona_context(
 
     if brand_context:
         lines.append("")
-        lines.append(f"Brand being evaluated: {brand_context.brand_name}")
+        brand_label = brand_context.brand_name
+        if brand_context.brand_url:
+            brand_label += f" ({brand_context.brand_url})"
+        lines.append(f"Brand being evaluated: {brand_label}")
 
         if assignment.cohort in (CohortType.SKEPTIC, CohortType.HATER) and brand_context.primary_objection:
             lines.append(

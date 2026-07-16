@@ -473,6 +473,7 @@ def prepare_simulation():
         if project.brand_name:
             brand_context = BrandContext(
                 brand_name=project.brand_name,
+                brand_url=project.brand_url,
                 primary_objection=project.primary_objection,
                 advocate_trigger=project.advocate_trigger,
                 target_segment=project.target_segment,

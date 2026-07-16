@@ -205,6 +205,15 @@
                 />
               </div>
               <div class="brand-field">
+                <label class="brand-label">Brand URL</label>
+                <input
+                  v-model="formData.brandUrl"
+                  class="brand-input"
+                  placeholder="e.g. https://acme.com"
+                  :disabled="loading"
+                />
+              </div>
+              <div class="brand-field">
                 <label class="brand-label">Primary Objection</label>
                 <input
                   v-model="formData.primaryObjection"
@@ -267,6 +276,7 @@ const router = useRouter()
 const formData = ref({
   simulationRequirement: '',
   brandName: '',
+  brandUrl: '',
   primaryObjection: '',
   advocateTrigger: '',
   targetSegment: '',
@@ -350,6 +360,7 @@ const startSimulation = () => {
   import('../store/pendingUpload.js').then(({ setPendingUpload }) => {
     setPendingUpload(files.value, formData.value.simulationRequirement, {
         brandName: formData.value.brandName,
+        brandUrl: formData.value.brandUrl,
         primaryObjection: formData.value.primaryObjection,
         advocateTrigger: formData.value.advocateTrigger,
         targetSegment: formData.value.targetSegment,

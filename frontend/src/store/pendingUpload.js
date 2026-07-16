@@ -8,6 +8,7 @@ const state = reactive({
   files: [],
   simulationRequirement: '',
   brandName: '',
+  brandUrl: '',
   primaryObjection: '',
   advocateTrigger: '',
   targetSegment: '',
@@ -18,6 +19,7 @@ export function setPendingUpload(files, requirement, brandContext = {}) {
   state.files = files
   state.simulationRequirement = requirement
   state.brandName = brandContext.brandName || ''
+  state.brandUrl = brandContext.brandUrl || ''
   state.primaryObjection = brandContext.primaryObjection || ''
   state.advocateTrigger = brandContext.advocateTrigger || ''
   state.targetSegment = brandContext.targetSegment || ''
@@ -29,6 +31,7 @@ export function getPendingUpload() {
     files: state.files,
     simulationRequirement: state.simulationRequirement,
     brandName: state.brandName,
+    brandUrl: state.brandUrl,
     primaryObjection: state.primaryObjection,
     advocateTrigger: state.advocateTrigger,
     targetSegment: state.targetSegment,
@@ -40,6 +43,7 @@ export function clearPendingUpload() {
   state.files = []
   state.simulationRequirement = ''
   state.brandName = ''
+  state.brandUrl = ''
   state.primaryObjection = ''
   state.advocateTrigger = ''
   state.targetSegment = ''

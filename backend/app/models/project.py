@@ -51,6 +51,7 @@ class Project:
 
     # Brand context (optional — sharpens cohort persona generation)
     brand_name: Optional[str] = None
+    brand_url: Optional[str] = None
     primary_objection: Optional[str] = None
     advocate_trigger: Optional[str] = None
     target_segment: Optional[str] = None
@@ -76,6 +77,7 @@ class Project:
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
             "brand_name": self.brand_name,
+            "brand_url": self.brand_url,
             "primary_objection": self.primary_objection,
             "advocate_trigger": self.advocate_trigger,
             "target_segment": self.target_segment,
@@ -105,6 +107,7 @@ class Project:
             chunk_size=data.get('chunk_size', 500),
             chunk_overlap=data.get('chunk_overlap', 50),
             brand_name=data.get('brand_name'),
+            brand_url=data.get('brand_url'),
             primary_objection=data.get('primary_objection'),
             advocate_trigger=data.get('advocate_trigger'),
             target_segment=data.get('target_segment'),

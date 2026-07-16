@@ -586,6 +586,7 @@ const handleNewProject = async () => {
     })
     formDataObj.append('simulation_requirement', pending.simulationRequirement)
     if (pending.brandName) formDataObj.append('brand_name', pending.brandName)
+    if (pending.brandUrl) formDataObj.append('brand_url', pending.brandUrl)
     if (pending.primaryObjection) formDataObj.append('primary_objection', pending.primaryObjection)
     if (pending.advocateTrigger) formDataObj.append('advocate_trigger', pending.advocateTrigger)
     if (pending.targetSegment) formDataObj.append('target_segment', pending.targetSegment)

@@ -155,6 +155,7 @@ def generate_ontology():
         project_name = request.form.get('project_name', 'Unnamed Project')
         additional_context = request.form.get('additional_context', '')
         brand_name = request.form.get('brand_name', '').strip() or None
+        brand_url = request.form.get('brand_url', '').strip() or None
         primary_objection = request.form.get('primary_objection', '').strip() or None
         advocate_trigger = request.form.get('advocate_trigger', '').strip() or None
         target_segment = request.form.get('target_segment', '').strip() or None
@@ -180,6 +181,7 @@ def generate_ontology():
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
         project.brand_name = brand_name
+        project.brand_url = brand_url
         project.primary_objection = primary_objection
         project.advocate_trigger = advocate_trigger
         project.target_segment = target_segment
