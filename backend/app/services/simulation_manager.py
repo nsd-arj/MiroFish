@@ -19,6 +19,14 @@ from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .spectrum_initializer import BrandContext
 from ..models.audience import AudienceManager
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
+from .brand_brief_generator import (
+    generate_brand_brief,
+    extract_simulation_requirement,
+    extract_use_cases,
+    extract_objections,
+    extract_topics,
+    extract_audience,
+)
 from ..utils.locale import t
 
 logger = get_logger('mirofish.simulation')
@@ -287,6 +295,51 @@ class SimulationManager:
             self._save_simulation_state(state)
 
             sim_dir = self._get_simulation_dir(simulation_id)
+
+            # ========== 阶段0: Generate brand brief (when brand context provided) ==========
+            if brand_context and brand_context.brand_name:
+                try:
+                    if progress_callback:
+                        progress_callback(
+                            "generating_brief", 0,
+                            f"Generating brand brief for {brand_context.brand_name}..."
+                        )
+
+                    brief = generate_brand_brief(
+                        brand_name=brand_context.brand_name,
+                        brand_url=brand_context.brand_url,
+                        primary_objection=brand_context.primary_objection,
+                        advocate_trigger=brand_context.advocate_trigger,
+                        target_segment=brand_context.target_segment,
+                    )
+
+                    # Save to simulation directory for reference
+                    brief_path = os.path.join(sim_dir, "brand_brief.md")
+                    with open(brief_path, "w", encoding="utf-8") as f:
+                        f.write(brief)
+
+                    # Auto-populate simulation_requirement if blank
+                    if not simulation_requirement or not simulation_requirement.strip():
+                        extracted = extract_simulation_requirement(brief)
+                        if extracted:
+                            simulation_requirement = extracted
+                            logger.info("Using auto-generated simulation requirement from brand brief")
+
+                    # Enrich brand_context with brief sections for persona generation
+                    brand_context.use_cases_context = extract_use_cases(brief)
+                    brand_context.objections_context = extract_objections(brief)
+                    brand_context.topics_context = extract_topics(brief)
+                    brand_context.audience_context = extract_audience(brief)
+
+                    if progress_callback:
+                        progress_callback(
+                            "generating_brief", 100,
+                            f"Brand brief ready ({len(brief)} chars)"
+                        )
+
+                except Exception as brief_err:
+                    logger.warning("Brand brief generation failed (non-fatal): %s", brief_err)
+                    # Brief generation failure is non-fatal — simulation continues without it
 
             # ========== 阶段1: 读取并过滤实体 ==========
             if progress_callback:

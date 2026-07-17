@@ -115,6 +115,11 @@ class BrandContext:
     advocate_trigger: Optional[str] = None     # e.g. "reconnecting with lost contacts"
     target_segment: Optional[str] = None       # e.g. "conscious consumer"
     brand_url: Optional[str] = None            # e.g. "https://acme.com"
+    # Populated from generated brand brief
+    use_cases_context: Optional[str] = None    # Expanded use cases (for advocate/loyalist prompts)
+    objections_context: Optional[str] = None   # Expanded objections (for skeptic/hater prompts)
+    topics_context: Optional[str] = None       # Key discussion topics (all agents)
+    audience_context: Optional[str] = None     # Target audience profile (all agents)
 
 
 @dataclass
@@ -198,5 +203,26 @@ def build_cohort_persona_context(
             lines.append(
                 f"This person fits the target segment profile of: {brand_context.target_segment}."
             )
+
+        # Inject brief-derived context for richer, brand-specific personas
+        if brand_context.use_cases_context and assignment.cohort in (CohortType.ADVOCATE, CohortType.LOYALIST):
+            lines.append("")
+            lines.append("Key use cases and value propositions for this brand:")
+            lines.append(brand_context.use_cases_context)
+
+        if brand_context.objections_context and assignment.cohort in (CohortType.SKEPTIC, CohortType.HATER):
+            lines.append("")
+            lines.append("Documented objections and friction points for this brand:")
+            lines.append(brand_context.objections_context)
+
+        if brand_context.audience_context:
+            lines.append("")
+            lines.append("Target audience profile for this brand:")
+            lines.append(brand_context.audience_context)
+
+        if brand_context.topics_context:
+            lines.append("")
+            lines.append("Topics likely to come up in this simulation:")
+            lines.append(brand_context.topics_context)
 
     return "\n".join(lines)

@@ -248,12 +248,15 @@
             <div class="console-section">
               <div class="console-header">
                 <span class="console-label">{{ $t('home.simulationPrompt') }}</span>
+                <span class="console-meta" v-if="hasBrandContext">auto-generated from brand context if blank</span>
               </div>
               <div class="input-wrapper">
                 <textarea
                   v-model="formData.simulationRequirement"
                   class="code-input"
-                  :placeholder="$t('home.promptPlaceholder')"
+                  :placeholder="hasBrandContext
+                    ? 'Optional — leave blank to auto-generate from brand context below, or write a specific hypothesis to test.'
+                    : $t('home.promptPlaceholder')"
                   rows="6"
                   :disabled="loading"
                 ></textarea>
@@ -420,8 +423,14 @@ const startFromAudience = async () => {
 }
 
 // 计算属性:是否可以提交
+const hasBrandContext = computed(() =>
+  formData.value.brandName.trim() !== ''
+)
+
 const canSubmit = computed(() => {
-  return formData.value.simulationRequirement.trim() !== '' && files.value.length > 0
+  if (files.value.length === 0) return false
+  // Either a simulation requirement OR brand context is sufficient
+  return formData.value.simulationRequirement.trim() !== '' || hasBrandContext.value
 })
 
 // 触发文件选择
