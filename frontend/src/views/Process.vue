@@ -581,7 +581,8 @@ const initProject = async () => {
 const handleNewProject = async () => {
   const pending = getPendingUpload()
   
-  if (!pending.isPending || pending.files.length === 0) {
+  const hasBrandContext = pending.brandName && pending.brandName.trim()
+  if (!pending.isPending || (pending.files.length === 0 && !hasBrandContext)) {
     error.value = 'No files pending upload, please return to the home page'
     loading.value = false
     return
