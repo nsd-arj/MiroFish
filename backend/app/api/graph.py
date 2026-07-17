@@ -13,6 +13,7 @@ from ..config import Config
 from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
 from ..services.text_processor import TextProcessor
+from ..services.brand_brief_generator import generate_brand_brief
 from ..utils.file_parser import FileParser
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
@@ -168,15 +169,19 @@ def generate_ontology():
                 "success": False,
                 "error": t('api.requireSimulationRequirement')
             }), 400
-        
+
+        has_brand_context = bool(brand_name)
+
         # 获取上传的文件
         uploaded_files = request.files.getlist('files')
-        if not uploaded_files or all(not f.filename for f in uploaded_files):
+        has_uploaded_files = uploaded_files and any(f.filename for f in uploaded_files)
+
+        if not has_uploaded_files and not has_brand_context:
             return jsonify({
                 "success": False,
                 "error": t('api.requireFileUpload')
             }), 400
-        
+
         # 创建项目
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
@@ -186,30 +191,50 @@ def generate_ontology():
         project.advocate_trigger = advocate_trigger
         project.target_segment = target_segment
         logger.info(f"创建项目: {project.project_id}")
-        
-        # 保存文件并提取文本
+
         document_texts = []
         all_text = ""
-        
-        for file in uploaded_files:
-            if file and file.filename and allowed_file(file.filename):
-                # 保存文件到项目目录
-                file_info = ProjectManager.save_file_to_project(
-                    project.project_id, 
-                    file, 
-                    file.filename
-                )
-                project.files.append({
-                    "filename": file_info["original_filename"],
-                    "size": file_info["size"]
-                })
-                
-                # 提取文本
-                text = FileParser.extract_text(file_info["path"])
-                text = TextProcessor.preprocess_text(text)
-                document_texts.append(text)
-                all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
-        
+
+        # --- Path A: uploaded files ---
+        if has_uploaded_files:
+            for file in uploaded_files:
+                if file and file.filename and allowed_file(file.filename):
+                    file_info = ProjectManager.save_file_to_project(
+                        project.project_id,
+                        file,
+                        file.filename
+                    )
+                    project.files.append({
+                        "filename": file_info["original_filename"],
+                        "size": file_info["size"]
+                    })
+                    text = FileParser.extract_text(file_info["path"])
+                    text = TextProcessor.preprocess_text(text)
+                    document_texts.append(text)
+                    all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
+
+        # --- Path B: no files, generate brand brief as reality seed ---
+        if not document_texts and has_brand_context:
+            logger.info("No files uploaded — generating brand brief as reality seed for '%s'", brand_name)
+            brief = generate_brand_brief(
+                brand_name=brand_name,
+                brand_url=brand_url,
+                primary_objection=primary_objection,
+                advocate_trigger=advocate_trigger,
+                target_segment=target_segment,
+            )
+            # Save the brief to the project directory for downstream use
+            brief_path = os.path.join(
+                ProjectManager._get_project_dir(project.project_id),
+                "brand_brief.md"
+            )
+            os.makedirs(os.path.dirname(brief_path), exist_ok=True)
+            with open(brief_path, "w", encoding="utf-8") as bf:
+                bf.write(brief)
+
+            document_texts = [brief]
+            all_text = f"=== Brand Brief: {brand_name} ===\n{brief}"
+
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
             return jsonify({

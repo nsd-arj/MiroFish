@@ -21,7 +21,6 @@ from ..models.audience import AudienceManager
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 from .brand_brief_generator import (
     generate_brand_brief,
-    extract_simulation_requirement,
     extract_use_cases,
     extract_objections,
     extract_topics,
@@ -296,34 +295,34 @@ class SimulationManager:
 
             sim_dir = self._get_simulation_dir(simulation_id)
 
-            # ========== 阶段0: Generate brand brief (when brand context provided) ==========
+            # ========== 阶段0: Load brand brief for persona enrichment ==========
             if brand_context and brand_context.brand_name:
                 try:
-                    if progress_callback:
-                        progress_callback(
-                            "generating_brief", 0,
-                            f"Generating brand brief for {brand_context.brand_name}..."
-                        )
-
-                    brief = generate_brand_brief(
-                        brand_name=brand_context.brand_name,
-                        brand_url=brand_context.brand_url,
-                        primary_objection=brand_context.primary_objection,
-                        advocate_trigger=brand_context.advocate_trigger,
-                        target_segment=brand_context.target_segment,
+                    # The brief was generated at project-creation time (graph.py) and
+                    # saved in the project directory. Load it rather than re-generating.
+                    from ..models.project import ProjectManager as _PM
+                    brief_path = os.path.join(
+                        _PM._get_project_dir(state.project_id), "brand_brief.md"
                     )
+                    brief = None
+                    if os.path.exists(brief_path):
+                        with open(brief_path, encoding="utf-8") as f:
+                            brief = f.read()
+                        logger.info("Loaded brand brief from project dir (%d chars)", len(brief))
+                    else:
+                        # Fallback: generate on the fly (e.g. files were uploaded instead)
+                        brief = generate_brand_brief(
+                            brand_name=brand_context.brand_name,
+                            brand_url=brand_context.brand_url,
+                            primary_objection=brand_context.primary_objection,
+                            advocate_trigger=brand_context.advocate_trigger,
+                            target_segment=brand_context.target_segment,
+                        )
+                        logger.info("Generated brand brief on-the-fly (%d chars)", len(brief))
 
-                    # Save to simulation directory for reference
-                    brief_path = os.path.join(sim_dir, "brand_brief.md")
-                    with open(brief_path, "w", encoding="utf-8") as f:
+                    # Copy brief into simulation dir for reference
+                    with open(os.path.join(sim_dir, "brand_brief.md"), "w", encoding="utf-8") as f:
                         f.write(brief)
-
-                    # Auto-populate simulation_requirement if blank
-                    if not simulation_requirement or not simulation_requirement.strip():
-                        extracted = extract_simulation_requirement(brief)
-                        if extracted:
-                            simulation_requirement = extracted
-                            logger.info("Using auto-generated simulation requirement from brand brief")
 
                     # Enrich brand_context with brief sections for persona generation
                     brand_context.use_cases_context = extract_use_cases(brief)
@@ -331,15 +330,8 @@ class SimulationManager:
                     brand_context.topics_context = extract_topics(brief)
                     brand_context.audience_context = extract_audience(brief)
 
-                    if progress_callback:
-                        progress_callback(
-                            "generating_brief", 100,
-                            f"Brand brief ready ({len(brief)} chars)"
-                        )
-
                 except Exception as brief_err:
-                    logger.warning("Brand brief generation failed (non-fatal): %s", brief_err)
-                    # Brief generation failure is non-fatal — simulation continues without it
+                    logger.warning("Brand brief loading failed (non-fatal): %s", brief_err)
 
             # ========== 阶段1: 读取并过滤实体 ==========
             if progress_callback:

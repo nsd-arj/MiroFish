@@ -202,7 +202,9 @@
             <div class="console-section">
               <div class="console-header">
                 <span class="console-label">{{ $t('home.realitySeed') }}</span>
-                <span class="console-meta">{{ $t('home.supportedFormats') }}</span>
+                <span class="console-meta">
+                  {{ hasBrandContext ? 'Optional — brand context generates seed automatically' : $t('home.supportedFormats') }}
+                </span>
               </div>
               
               <div 
@@ -248,15 +250,12 @@
             <div class="console-section">
               <div class="console-header">
                 <span class="console-label">{{ $t('home.simulationPrompt') }}</span>
-                <span class="console-meta" v-if="hasBrandContext">auto-generated from brand context if blank</span>
               </div>
               <div class="input-wrapper">
                 <textarea
                   v-model="formData.simulationRequirement"
                   class="code-input"
-                  :placeholder="hasBrandContext
-                    ? 'Optional — leave blank to auto-generate from brand context below, or write a specific hypothesis to test.'
-                    : $t('home.promptPlaceholder')"
+                  :placeholder="$t('home.promptPlaceholder')"
                   rows="6"
                   :disabled="loading"
                 ></textarea>
@@ -428,9 +427,9 @@ const hasBrandContext = computed(() =>
 )
 
 const canSubmit = computed(() => {
-  if (files.value.length === 0) return false
-  // Either a simulation requirement OR brand context is sufficient
-  return formData.value.simulationRequirement.trim() !== '' || hasBrandContext.value
+  if (!formData.value.simulationRequirement.trim()) return false
+  // Files required only when brand context is not provided
+  return files.value.length > 0 || hasBrandContext.value
 })
 
 // 触发文件选择
