@@ -193,21 +193,27 @@ const initProject = async () => {
 
 const handleNewProject = async () => {
   const pending = getPendingUpload()
-  if (!pending.isPending || pending.files.length === 0) {
+  const hasBrandContext = pending.brandName && pending.brandName.trim()
+  if (!pending.isPending || (pending.files.length === 0 && !hasBrandContext)) {
     error.value = 'No pending files found.'
     addLog('Error: No pending files found for new project.')
     return
   }
-  
+
   try {
     loading.value = true
     currentPhase.value = 0
     ontologyProgress.value = { message: 'Uploading and analyzing docs...' }
     addLog('Starting ontology generation: Uploading files...')
-    
+
     const formData = new FormData()
     pending.files.forEach(f => formData.append('files', f))
     formData.append('simulation_requirement', pending.simulationRequirement)
+    if (pending.brandName) formData.append('brand_name', pending.brandName)
+    if (pending.brandUrl) formData.append('brand_url', pending.brandUrl)
+    if (pending.primaryObjection) formData.append('primary_objection', pending.primaryObjection)
+    if (pending.advocateTrigger) formData.append('advocate_trigger', pending.advocateTrigger)
+    if (pending.targetSegment) formData.append('target_segment', pending.targetSegment)
     
     const res = await generateOntology(formData)
     if (res.success) {

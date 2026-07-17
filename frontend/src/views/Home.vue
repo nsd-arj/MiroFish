@@ -345,6 +345,7 @@ import HistoryDatabase from '../components/HistoryDatabase.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import { listAudiences } from '../api/audience'
 import { createSimulation } from '../api/simulation'
+import { setPendingUpload } from '../store/pendingUpload'
 
 const router = useRouter()
 
@@ -490,21 +491,17 @@ const scrollToBottom = () => {
 const startSimulation = () => {
   if (!canSubmit.value || loading.value) return
   
-  // 存储待上传的数据
-  import('../store/pendingUpload.js').then(({ setPendingUpload }) => {
-    setPendingUpload(files.value, formData.value.simulationRequirement, {
-        brandName: formData.value.brandName,
-        brandUrl: formData.value.brandUrl,
-        primaryObjection: formData.value.primaryObjection,
-        advocateTrigger: formData.value.advocateTrigger,
-        targetSegment: formData.value.targetSegment,
-      })
-    
-    // 立即跳转到Process页面（使用特殊标识表示新建项目）
-    router.push({
-      name: 'Process',
-      params: { projectId: 'new' }
-    })
+  setPendingUpload(files.value, formData.value.simulationRequirement, {
+    brandName: formData.value.brandName,
+    brandUrl: formData.value.brandUrl,
+    primaryObjection: formData.value.primaryObjection,
+    advocateTrigger: formData.value.advocateTrigger,
+    targetSegment: formData.value.targetSegment,
+  })
+
+  router.push({
+    name: 'Process',
+    params: { projectId: 'new' }
   })
 }
 </script>
