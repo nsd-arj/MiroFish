@@ -332,6 +332,28 @@
         </div>
       </section>
 
+      <!-- Recent Projects -->
+      <section v-if="recentProjects.length > 0" class="recent-projects">
+        <h3 class="recent-title">Recent Runs</h3>
+        <div class="recent-list">
+          <div
+            v-for="proj in recentProjects"
+            :key="proj.project_id"
+            class="recent-card"
+          >
+            <div class="recent-card-info">
+              <span class="recent-brand">{{ proj.brand_name || proj.name || proj.project_id }}</span>
+              <span :class="['recent-status', statusLabel(proj.status).cls]">
+                {{ statusLabel(proj.status).text }}
+              </span>
+            </div>
+            <button class="recent-resume-btn" @click="resumeProject(proj.project_id)">
+              Resume
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- 历史项目数据库 -->
       <HistoryDatabase />
     </div>
@@ -346,6 +368,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import { listAudiences } from '../api/audience'
 import { createSimulation } from '../api/simulation'
 import { setPendingUpload } from '../store/pendingUpload'
+import { listProjects } from '../api/graph'
 
 const router = useRouter()
 
@@ -487,10 +510,73 @@ const scrollToBottom = () => {
   })
 }
 
+// Recent projects
+const recentProjects = ref([])
+const recentLoading = ref(false)
+
+const STATUS_LABEL = {
+  created: { text: 'Ontology pending', cls: 'status-pending' },
+  ontology_generated: { text: 'Ready to build', cls: 'status-pending' },
+  graph_building: { text: 'Building graph…', cls: 'status-running' },
+  graph_completed: { text: 'Graph ready', cls: 'status-done' },
+  failed: { text: 'Failed', cls: 'status-failed' },
+}
+
+const statusLabel = (s) => STATUS_LABEL[s] || { text: s, cls: '' }
+
+const loadRecentProjects = async () => {
+  recentLoading.value = true
+  try {
+    const res = await listProjects(8)
+    if (res.success) recentProjects.value = res.data
+  } catch (_) {}
+  finally { recentLoading.value = false }
+}
+
+const resumeProject = (projectId) => {
+  router.push({ name: 'Process', params: { projectId } })
+}
+
+const FORM_STORAGE_KEY = 'mirofish_last_form'
+
+const saveFormToStorage = () => {
+  try {
+    localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify({
+      simulationRequirement: formData.value.simulationRequirement,
+      brandName: formData.value.brandName,
+      brandUrl: formData.value.brandUrl,
+      primaryObjection: formData.value.primaryObjection,
+      advocateTrigger: formData.value.advocateTrigger,
+      targetSegment: formData.value.targetSegment,
+    }))
+  } catch (_) {}
+}
+
+const restoreFormFromStorage = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FORM_STORAGE_KEY) || 'null')
+    if (saved) {
+      formData.value.simulationRequirement = saved.simulationRequirement || ''
+      formData.value.brandName = saved.brandName || ''
+      formData.value.brandUrl = saved.brandUrl || ''
+      formData.value.primaryObjection = saved.primaryObjection || ''
+      formData.value.advocateTrigger = saved.advocateTrigger || ''
+      formData.value.targetSegment = saved.targetSegment || ''
+    }
+  } catch (_) {}
+}
+
+onMounted(() => {
+  restoreFormFromStorage()
+  loadRecentProjects()
+})
+
 // 开始模拟 - 立即跳转，API调用在Process页面进行
 const startSimulation = () => {
   if (!canSubmit.value || loading.value) return
-  
+
+  saveFormToStorage()
+
   setPendingUpload(files.value, formData.value.simulationRequirement, {
     brandName: formData.value.brandName,
     brandUrl: formData.value.brandUrl,
@@ -1272,4 +1358,69 @@ html[lang="en"] .workflow-list .step-desc {
 html[lang="en"] .workflow-list {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* Recent Projects */
+.recent-projects {
+  padding: 24px 32px;
+  border-top: 1px solid var(--border, #E5E5E5);
+}
+.recent-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-text, #666);
+  margin-bottom: 12px;
+}
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recent-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--border, #E5E5E5);
+  border-radius: 6px;
+  gap: 12px;
+}
+.recent-card-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.recent-brand {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.status-pending  { background: #FFF3CD; color: #856404; }
+.status-running  { background: #D1ECF1; color: #0C5460; }
+.status-done     { background: #D4EDDA; color: #155724; }
+.status-failed   { background: #F8D7DA; color: #721C24; }
+.recent-resume-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: #000;
+  color: #FFF;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.recent-resume-btn:hover { opacity: 0.75; }
 </style>

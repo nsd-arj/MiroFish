@@ -13,7 +13,7 @@ from ..config import Config
 from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
 from ..services.text_processor import TextProcessor
-from ..services.brand_brief_generator import generate_brand_brief
+from ..services.brand_brief_generator import compose_brand_seed_text
 from ..utils.file_parser import FileParser
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
@@ -118,6 +118,58 @@ def reset_project(project_id: str):
     })
 
 
+# ============== Retry ontology for an existing project ==============
+
+@graph_bp.route('/project/<project_id>/retry-ontology', methods=['POST'])
+def retry_ontology(project_id: str):
+    project = ProjectManager.get_project(project_id)
+    if not project:
+        return jsonify({"success": False, "error": t('api.projectNotFound', id=project_id)}), 404
+
+    text = ProjectManager.get_extracted_text(project_id)
+    if not text:
+        return jsonify({"success": False, "error": "No extracted text found for project."}), 400
+
+    # Reset status so downstream checks pass
+    project.status = ProjectStatus.CREATED
+    project.ontology = None
+    project.analysis_summary = ""
+    ProjectManager.save_project(project)
+
+    task_manager = TaskManager()
+    task_id = task_manager.create_task(f"Retry ontology: {project.name}")
+    current_locale = get_locale()
+
+    simulation_requirement = project.simulation_requirement or ""
+
+    def ontology_task():
+        set_locale(current_locale)
+        try:
+            task_manager.update_task(task_id, status=TaskStatus.PROCESSING,
+                                     message="Re-generating ontology...")
+            generator = OntologyGenerator()
+            ontology = generator.generate(
+                document_texts=[text],
+                simulation_requirement=simulation_requirement,
+            )
+            proj = ProjectManager.get_project(project_id)
+            proj.ontology = {
+                "entity_types": ontology.get("entity_types", []),
+                "edge_types": ontology.get("edge_types", [])
+            }
+            proj.analysis_summary = ontology.get("analysis_summary", "")
+            proj.status = ProjectStatus.ONTOLOGY_GENERATED
+            ProjectManager.save_project(proj)
+            task_manager.complete_task(task_id, result={"project_id": project_id})
+        except Exception as exc:
+            logger.error(f"Retry ontology failed: {exc}", exc_info=True)
+            task_manager.fail_task(task_id, error=str(exc))
+
+    threading.Thread(target=ontology_task, daemon=True).start()
+
+    return jsonify({"success": True, "data": {"project_id": project_id, "task_id": task_id}})
+
+
 # ============== 接口1：上传文件并生成本体 ==============
 
 @graph_bp.route('/ontology/generate', methods=['POST'])
@@ -213,27 +265,18 @@ def generate_ontology():
                     document_texts.append(text)
                     all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
 
-        # --- Path B: no files, generate brand brief as reality seed ---
+        # --- Path B: no files, compose seed text directly from brand fields (no LLM) ---
         if not document_texts and has_brand_context:
-            logger.info("No files uploaded — generating brand brief as reality seed for '%s'", brand_name)
-            brief = generate_brand_brief(
+            logger.info("No files uploaded — composing brand seed text for '%s'", brand_name)
+            seed_text = compose_brand_seed_text(
                 brand_name=brand_name,
                 brand_url=brand_url,
                 primary_objection=primary_objection,
                 advocate_trigger=advocate_trigger,
                 target_segment=target_segment,
             )
-            # Save the brief to the project directory for downstream use
-            brief_path = os.path.join(
-                ProjectManager._get_project_dir(project.project_id),
-                "brand_brief.md"
-            )
-            os.makedirs(os.path.dirname(brief_path), exist_ok=True)
-            with open(brief_path, "w", encoding="utf-8") as bf:
-                bf.write(brief)
-
-            document_texts = [brief]
-            all_text = f"=== Brand Brief: {brand_name} ===\n{brief}"
+            document_texts = [seed_text]
+            all_text = f"=== Brand Context: {brand_name} ===\n{seed_text}"
 
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
@@ -241,47 +284,64 @@ def generate_ontology():
                 "success": False,
                 "error": t('api.noDocProcessed')
             }), 400
-        
-        # 保存提取的文本
+
+        # Save extracted text synchronously (fast)
         project.total_text_length = len(all_text)
         ProjectManager.save_extracted_text(project.project_id, all_text)
         logger.info(f"文本提取完成，共 {len(all_text)} 字符")
-        
-        # 生成本体
-        logger.info("调用 LLM 生成本体定义...")
-        generator = OntologyGenerator()
-        ontology = generator.generate(
-            document_texts=document_texts,
-            simulation_requirement=simulation_requirement,
-            additional_context=additional_context if additional_context else None
-        )
-        
-        # 保存本体到项目
-        entity_count = len(ontology.get("entity_types", []))
-        edge_count = len(ontology.get("edge_types", []))
-        logger.info(f"本体生成完成: {entity_count} 个实体类型, {edge_count} 个关系类型")
-        
-        project.ontology = {
-            "entity_types": ontology.get("entity_types", []),
-            "edge_types": ontology.get("edge_types", [])
-        }
-        project.analysis_summary = ontology.get("analysis_summary", "")
-        project.status = ProjectStatus.ONTOLOGY_GENERATED
         ProjectManager.save_project(project)
-        logger.info(f"=== 本体生成完成 === 项目ID: {project.project_id}")
-        
+
+        # Create async task — LLM ontology generation runs in background
+        task_manager = TaskManager()
+        task_id = task_manager.create_task(f"生成本体: {project.name}")
+        logger.info(f"创建本体生成任务: task_id={task_id}, project_id={project.project_id}")
+
+        current_locale = get_locale()
+
+        def ontology_task():
+            set_locale(current_locale)
+            try:
+                task_manager.update_task(task_id, status=TaskStatus.PROCESSING,
+                                         message="Analysing content and generating ontology...")
+                generator = OntologyGenerator()
+                ontology = generator.generate(
+                    document_texts=document_texts,
+                    simulation_requirement=simulation_requirement,
+                    additional_context=additional_context if additional_context else None
+                )
+                entity_count = len(ontology.get("entity_types", []))
+                edge_count = len(ontology.get("edge_types", []))
+                logger.info(f"本体生成完成: {entity_count} 个实体类型, {edge_count} 个关系类型")
+
+                proj = ProjectManager.get_project(project.project_id)
+                proj.ontology = {
+                    "entity_types": ontology.get("entity_types", []),
+                    "edge_types": ontology.get("edge_types", [])
+                }
+                proj.analysis_summary = ontology.get("analysis_summary", "")
+                proj.status = ProjectStatus.ONTOLOGY_GENERATED
+                ProjectManager.save_project(proj)
+
+                task_manager.complete_task(task_id, result={
+                    "project_id": proj.project_id,
+                    "entity_count": entity_count,
+                    "edge_count": edge_count,
+                })
+                logger.info(f"=== 本体生成完成 === 项目ID: {proj.project_id}")
+            except Exception as exc:
+                logger.error(f"本体生成任务失败: {exc}", exc_info=True)
+                task_manager.fail_task(task_id, error=str(exc))
+
+        threading.Thread(target=ontology_task, daemon=True).start()
+
         return jsonify({
             "success": True,
             "data": {
                 "project_id": project.project_id,
-                "project_name": project.name,
-                "ontology": project.ontology,
-                "analysis_summary": project.analysis_summary,
-                "files": project.files,
-                "total_text_length": project.total_text_length
+                "task_id": task_id,
             }
         })
-        
+
     except Exception as e:
         return jsonify({
             "success": False,

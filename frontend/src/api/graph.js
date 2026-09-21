@@ -68,3 +68,17 @@ export function getProject(projectId) {
     method: 'get'
   })
 }
+
+export function listProjects(limit = 20) {
+  return service({
+    url: `/graph/project/list?limit=${limit}`,
+    method: 'get'
+  })
+}
+
+export function retryOntology(projectId) {
+  return service({
+    url: `/graph/project/${projectId}/retry-ontology`,
+    method: 'post'
+  })
+}

@@ -109,6 +109,7 @@
                 </div>
               </div>
             </div>
+          </div>
           <!-- Save as Audience -->
           <div v-if="phase > 1 && profiles.length > 0" class="save-audience-block">
             <div v-if="!audienceSaved">

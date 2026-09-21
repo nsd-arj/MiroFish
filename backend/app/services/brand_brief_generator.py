@@ -97,6 +97,43 @@ peer advocacy, where the brand is most vulnerable, or what sentiment trajectory 
 """
 
 
+def compose_brand_seed_text(
+    brand_name: str,
+    brand_url: Optional[str] = None,
+    primary_objection: Optional[str] = None,
+    advocate_trigger: Optional[str] = None,
+    target_segment: Optional[str] = None,
+) -> str:
+    """Compose a structured seed document from brand context fields — no LLM call.
+
+    This is used as the reality seed for Zep graph building. The ontology
+    generator's LLM will extract entity types from this text. The full
+    brand brief (LLM-generated) is produced later in prepare_simulation
+    where the call is async and non-blocking.
+    """
+    url_line = f" ({brand_url})" if brand_url else ""
+    lines = [
+        f"# Brand: {brand_name}{url_line}",
+        "",
+        "## Target Audience",
+        target_segment or "General consumers.",
+        "",
+        "## Key Use Cases and Advocate Triggers",
+        advocate_trigger or "Not specified.",
+        "",
+        "## Primary Objections and Friction Points",
+        primary_objection or "Not specified.",
+        "",
+        "## Brand Summary",
+        (
+            f"{brand_name}{url_line} serves {target_segment or 'consumers'}. "
+            f"People use it for: {advocate_trigger or 'various purposes'}. "
+            f"The main objections are: {primary_objection or 'none specified'}."
+        ),
+    ]
+    return "\n".join(lines)
+
+
 def generate_brand_brief(
     brand_name: str,
     brand_url: Optional[str] = None,
